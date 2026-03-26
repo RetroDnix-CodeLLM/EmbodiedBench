@@ -31,6 +31,10 @@ class RemoteModel:
         self.language_only = language_only
         self.task_type = task_type
 
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.cached_tokens = 0
+
         if self.model_type == 'local':
             backend_config = PytorchEngineConfig(session_len=12000, dtype='float16', tp=tp)
             self.model = pipeline(self.model_name, backend_config=backend_config)
@@ -45,7 +49,10 @@ class RemoteModel:
                     base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
                 )
             elif "gpt" in self.model_name:
-                self.model = OpenAI()
+                self.model = OpenAI(
+                    # base_url="https://openrouter.ai/api/v1"
+                    base_url="https://aifast.site/v1"
+                )
             elif 'qwen' in self.model_name:
                 self.model = OpenAI(
                     api_key=os.getenv("DASHSCOPE_API_KEY"),
@@ -195,6 +202,12 @@ class RemoteModel:
             max_tokens=max_completion_tokens
         )
         out = response.choices[0].message.content
+        if usage := getattr(response, "usage", None):
+            self.input_tokens += usage.prompt_tokens
+            self.output_tokens += usage.completion_tokens
+            if usage.prompt_tokens_details is not None:
+                self.cached_tokens += usage.prompt_tokens_details.cached_tokens
+
 
         return out
     

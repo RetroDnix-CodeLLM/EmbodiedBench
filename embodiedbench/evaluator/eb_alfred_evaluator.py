@@ -121,7 +121,11 @@ class EB_AlfredEvaluator():
                     
                     # mutiple actions
                     if type(action) == list:
-                        for action_single in action[:min(self.env._max_episode_steps - self.env._current_step, len(action))]:
+                        if os.getenv("EXTRA_ONE_STEP") != None:
+                            action_limit = 1
+                        else:
+                            action_limit = 5
+                        for action_single in action[:min(self.env._max_episode_steps - self.env._current_step, len(action), action_limit)]:
                             obs, reward, done, info = self.env.step(action_single, reasoning=reasoning)
                             action_str = action_single if type(action_single) == str else self.env.language_skill_set[action_single]
                             print(f"Executed action: {action_str}, Task success: {info['task_success']}")
@@ -131,7 +135,10 @@ class EB_AlfredEvaluator():
                             img_path = self.env.save_image(obs)
                             episode_info['reward'].append(reward)
                             episode_info['num_invalid_actions'] += (info['last_action_success'] == 0)
-                            if done or not info['last_action_success']:
+                            
+                            # Only stop when done
+                            # if done or not info['last_action_success']:
+                            if done:
                                 # stop or replanning
                                 print("Invalid action or task complete. If invalid then Replanning.")
                                 break
@@ -151,6 +158,18 @@ class EB_AlfredEvaluator():
                     print(e)
                     time.sleep(30)
 
+            
+            temp_usage_path = os.path.join(self.env.log_path, 'results')
+            os.makedirs(temp_usage_path, exist_ok=True)
+            json.dump({
+                    'input_tokens': self.planner.model.input_tokens,
+                    'output_tokens': self.planner.model.output_tokens,
+                    'cached_tokens': self.planner.model.cached_tokens,
+                }, 
+                open(os.path.join(temp_usage_path, f'total_token_usage.json'), 'w'), 
+                ensure_ascii=False, 
+                indent=4
+            )
             # evaluation metrics
             episode_info['instruction'] = user_instruction
             episode_info['reward'] = np.mean(episode_info['reward'])

@@ -1,5 +1,6 @@
 vlm_generation_guide={
     "type": "object",
+    "additionalProperties": False,
     'properties': {
         "visual_state_description": {
             "type": "string",

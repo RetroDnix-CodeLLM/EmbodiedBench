@@ -61,6 +61,10 @@ class VLMPlanner():
                 prompt += f" You are supposed to output in json. You need to output your reasoning steps and plan. At the end, output the action id (0 ~ {len(self.actions)-1}) from the available actions to excute."
             else:
                 prompt += f" You are supposed to output in json. You need to describe current visual state from the image, output your reasoning steps and plan. At the end, output the action id (0 ~ {len(self.actions)-1}) from the available actions to excute."
+                if os.getenv("EXTRA_MULTI_STEP") != None:
+                    prompt += "You should generate at most 5 actions in the plan."
+                elif os.getenv("EXTRA_ONE_STEP") != None:
+                    prompt += "Unlike the examples, you are required to generate only 1 action for the plan."
         
         elif self.chat_history:
             prompt = f'The human instruction is: {user_instruction}.'
@@ -92,6 +96,10 @@ class VLMPlanner():
                 prompt += f'''\n\n Considering the above interaction history, to achieve the human instruction: '{user_instruction}', you are supposed to output in json. You need to summarize interaction history {'and environment feedback ' if self.use_feedback else ''}and reason why the last action or plan failed and did not finish the task, output your new plan to achieve the goal from current state. At the end, output the excutable plan with action ids(0 ~ {len(self.actions)-1}) from the available actions.'''
             else:
                 prompt += f'''\n\n Considering the above interaction history and the current image state, to achieve the human instruction: '{user_instruction}', you are supposed to output in json. You need to describe current visual state from the image, summarize interaction history {'and environment feedback ' if self.use_feedback else ''}and reason why the last action or plan failed and did not finish the task, output your new plan to achieve the goal from current state. At the end, output the excutable plan with action ids(0 ~ {len(self.actions)-1}) from the available actions.'''
+                if os.getenv("EXTRA_MULTI_STEP") != None:
+                    prompt += "You should generate at most 5 actions in the plan."
+                elif os.getenv("EXTRA_ONE_STEP") != None:
+                    prompt += "Unlike the examples, you are required to generate only 1 action for the plan."
         return prompt
     
 
