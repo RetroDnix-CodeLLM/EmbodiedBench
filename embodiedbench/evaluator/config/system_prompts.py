@@ -10,7 +10,7 @@ alfred_system_prompt = '''## You are a robot operating in a home. Given a task, 
 • Turn on: Parameterized by the name of the object to turn on. Only valid if the object is turned off and the robot is close to the object.
 • Turn off: Parameterized by the name of the object to turn off. Only valid if the object is turned on and the robot is close to the object.
 • Slice: Parameterized by the name of the object to slice. Only valid if the object is sliceable and the robot is close to the object.
-
+* Hint: Even though the object is in your sight, you must use "find obj" to target at specific object before any interacting(e.g. pick up, turn on, or put something on the object).  For instance, if you have an apple in hand and want to put it on cabinet, you should first call "find cabinet" then call "put down the object in hand"
 
 ## The available action id (0 ~ {}) and action names are: {}.
 

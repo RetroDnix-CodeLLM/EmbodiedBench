@@ -11,6 +11,7 @@ from embodiedbench.evaluator.config.system_prompts import alfred_system_prompt
 from embodiedbench.main import logger
 
 example_path = os.path.join(os.path.dirname(__file__), 'config/alfred_examples.json')
+react_example_path = os.path.join(os.path.dirname(__file__), 'config/alfred_react_examples.json')
 exploration_example_path = os.path.join(os.path.dirname(__file__), 'config/alfred_long_horizon_examples.json')
 system_prompt = alfred_system_prompt
 
@@ -57,7 +58,7 @@ class EB_AlfredEvaluator():
                                           detection_box=self.config.get('detection_box', False),
                                           resolution=self.config.get('resolution', 500), 
                                           )
-            examples = json.load(open(example_path, 'r+')) if self.eval_set != 'long_horizon' else json.load(open(exploration_example_path, 'r+'))
+            examples = json.load(open(react_example_path, 'r+')) if os.getenv("EXTRA_ONE_STEP") else json.load(open(example_path, 'r+')) if self.eval_set != 'long_horizon' else json.load(open(exploration_example_path, 'r+'))
             model_type = self.config.get('model_type', 'remote')
             self.planner = VLMPlanner(self.model_name, model_type, self.env.language_skill_set, system_prompt, examples, n_shot=self.config['n_shots'], 
                                             obs_key='head_rgb', chat_history=self.config['chat_history'], language_only=self.config['language_only'],

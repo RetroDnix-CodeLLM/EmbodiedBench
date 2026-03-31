@@ -1,0 +1,4 @@
+[
+    "Human instruction: Pick up the alarm clock and turn on the lamp.\nThe action history:\nStep 0, action_id 57, find a AlarmClock, env feedback: Last action executed successfully.\nOutput:\n{\n'language_plan': 'I have found the alarm clock, now I need to pick it up.',\n'executable_plan': [{'action_id': 98, 'action_name': 'pick up the AlarmClock'}]\n}",
+    "Human instruction: Pick up the alarm clock and turn on the lamp.\n\nThe action history:\nStep 0, action_id 57, find a AlarmClock, env feedback: Last action executed successfully.\nStep 1, action_id 98, pick up the AlarmClock, env feedback: Last action executed successfully.\nOutput: {\n'language_plan': 'I have picked up the AlarmClock, now I need to locate the DeskLamp before turning it on.',\n'executable_plan': [{'action_id': 63, 'action_name': 'find a DeskLamp'}]\n}"
+]
