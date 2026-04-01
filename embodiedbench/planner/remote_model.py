@@ -10,11 +10,12 @@ import lmdeploy
 from lmdeploy import pipeline, GenerationConfig, PytorchEngineConfig
 from embodiedbench.planner.planner_config.generation_guide import llm_generation_guide, vlm_generation_guide
 from embodiedbench.planner.planner_config.generation_guide_manip import llm_generation_guide_manip, vlm_generation_guide_manip
+from embodiedbench.planner.planner_config.generation_guide_eocv import vlm_generation_guide_eocv
 from embodiedbench.planner.planner_utils import convert_format_2claude, convert_format_2gemini, ActionPlan_1, ActionPlan, ActionPlan_lang, \
                                              ActionPlan_1_manip, ActionPlan_manip, ActionPlan_lang_manip, fix_json
 
 temperature = 0
-max_completion_tokens = 2048
+max_completion_tokens = 4096
 remote_url = os.environ.get('remote_url')
 
 class RemoteModel:
@@ -53,7 +54,7 @@ class RemoteModel:
                     # base_url="https://openrouter.ai/api/v1"
                     base_url="https://aifast.site/v1"
                 )
-            elif 'qwen' in self.model_name:
+            elif 'qwen' in self.model_name or 'kimi' in self.model_name:
                 self.model = OpenAI(
                     api_key=os.getenv("DASHSCOPE_API_KEY"),
                     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -88,7 +89,7 @@ class RemoteModel:
                 return self._call_gemini(message_history)
             elif "gpt" in self.model_name:
                 return self._call_gpt(message_history)
-            elif 'qwen' in self.model_name:
+            elif 'qwen' in self.model_name or 'kimi' in self.model_name:
                 return self._call_gpt(message_history)
             elif "Qwen2-VL-7B-Instruct" in self.model_name:
                 return self._call_qwen7b(message_history)
@@ -184,7 +185,9 @@ class RemoteModel:
     def _call_gpt(self, message_history: list):
 
         if not self.language_only:
-            if self.task_type == 'manip':
+            if os.getenv("EXTRA_EOCV") is not None:
+                response_format=dict(type='json_schema',  json_schema=dict(name='embodied_planning',schema=vlm_generation_guide_eocv))
+            elif self.task_type == 'manip':
                 response_format=dict(type='json_schema',  json_schema=dict(name='embodied_planning',schema=vlm_generation_guide_manip))
             else:
                 response_format=dict(type='json_schema',  json_schema=dict(name='embodied_planning',schema=vlm_generation_guide))
@@ -199,15 +202,18 @@ class RemoteModel:
             messages=message_history,
             response_format=response_format,
             temperature=temperature,
-            max_tokens=max_completion_tokens
+            max_tokens=max_completion_tokens,
+            # extra_body={
+            #     'enable_thinking': True,
+            #     "thinking_budget": 2048
+            # }
         )
         out = response.choices[0].message.content
         if usage := getattr(response, "usage", None):
             self.input_tokens += usage.prompt_tokens
             self.output_tokens += usage.completion_tokens
-            if usage.prompt_tokens_details is not None:
+            if usage.prompt_tokens_details is not None and isinstance(usage.prompt_tokens_details.cached_tokens, int):
                 self.cached_tokens += usage.prompt_tokens_details.cached_tokens
-
 
         return out
     

@@ -13,16 +13,15 @@ for base in data_base:
     task_split = os.listdir(base)
     task_split.sort()  # Ensure consistent order
     for task in task_split:
-        log_dir = Path(base) / task / "results/summary.json"
+        log_dir = Path(base) / task / "results"
         if not os.path.exists(log_dir):
             print(f"Log file not found for task: {task}")
             continue
-        log = json.load(open(log_dir, "r"))
-        task_progress = log["task_progress"]
-
-        usage_dir = Path(base) / task / "results/total_token_usage.json"
-        usage = json.load(open(usage_dir, "r"))
-        input_tokens = usage["input_tokens"]
-        output_tokens = usage["output_tokens"]
-
-        print(f"Task: {task}, Progress: {task_progress}, Input Tokens: {input_tokens}, Output Tokens: {output_tokens}, Avg Tokens: {input_tokens * 0.1 + output_tokens}")
+        
+        logs = list(log_dir.glob("*_res.json"))
+        logs.sort()
+        for log in logs:
+            log_data = json.load(open(log, "r"))
+            if "task_progress" in log_data:
+                task_progress = log_data["task_progress"]
+                print(f"Split '{task}' Episode '{log.stem}': Progress: {task_progress : .2f}")

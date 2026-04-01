@@ -64,7 +64,13 @@ class VLMPlanner():
                 if os.getenv("EXTRA_MULTI_STEP") != None:
                     prompt += "You should generate at most 5 actions in the plan."
                 elif os.getenv("EXTRA_ONE_STEP") != None:
-                    prompt += "Unlike the examples, you are required to generate only 1 action for the plan."
+                    prompt += "You are required to generate only 1 action for the plan. Reflection on the current state and your previous actions, decide the best action to take at the current step, and do not output more than 1 action."
+                elif os.getenv("EXTRA_EOCV") != None:
+                    examples = [
+                        "Example 1:\nHuman instruction: Put both an toy airplane and a bowl onto the black table.\nOutput: {'language_plan': 'To achieve the goal, the robot must locate the toy airplane and the bowl in the room and then move each item to the black table. There are two tables in the room, and the robot identifies table 1 as the black table. Therefore, the objective is to place both objects on table 1. The plan is as follows: first, navigate to the sofa, pick up the airplane, move to table 1, and place the airplane there. Then, proceed to table 2, where the bowl might be, pick up the bowl, return to table 1, and set the bowl there.', 'executable_plan': [{'action_id': 12, 'action_name': 'navigate to the sofa', 'expected_observation': 'The robot is near the sofa.'}, {'action_id': 47, 'action_name': 'pick up the toy airplane', 'expected_observation': 'The toy airplane is picked up by the robot.'}, {'action_id': 6, 'action_description': 'navigate to the table 1', 'expected_observation': 'The robot is near the table 1.'}, {'action_id': 50, 'action_description': 'place at the table 1', 'expected_observation': 'The toy airplane is placed on the table 1.'}, {'action_id': 7, 'action_description': 'navigate to the table 2', 'expected_observation': 'The robot is near the table 2.'}, {'action_id': 42, 'action_description': 'pick up the bowl', 'expected_observation': 'The bowl is picked up by the robot.'}, {'action_id': 6, 'action_description': 'navigate to the table 1', 'expected_observation': 'The robot is near the table 1.'}, {'action_id': 50, 'action_description': 'place at the table 1', 'expected_observation': 'The bowl is placed on the table 1.'}]}\n\n",
+                        "Example 2:\nHuman instruction: I made a mistake and left the fridge open. Can you assist me by closing it?\nOutput: {'language_plan': 'The objective is for the robot to close the refrigerator. To do so, the robot first navigates to the refrigerator and then closes it.', 'executable_plan': [{'action_id': 13, 'action_name': 'navigate to the refrigerator', 'expected_observation': 'The robot is near the refrigerator.'}, {'action_id': 61, 'action_name': 'close the refrigerator', 'expected_observation': 'The refrigerator is closed.'}]}\n\n"
+                    ] 
+                    prompt += "You should generate at most 5 actions in the plan. Additionally, in order to verify if your plan is executable, you need to output your expected observation(discribed in text) after executing each action in the plan. The expected visual state should be concise and only include key information such as object locations and states, without detailed descriptions. Here are some examples:\n\n" + examples[0] + examples[1]
         
         elif self.chat_history:
             prompt = f'The human instruction is: {user_instruction}.'
@@ -100,6 +106,13 @@ class VLMPlanner():
                     prompt += "You should generate at most 5 actions in the plan."
                 elif os.getenv("EXTRA_ONE_STEP") != None:
                     prompt += "Unlike the examples, you are required to generate only 1 action for the plan."
+                elif os.getenv("EXTRA_EOCV") != None:
+                    examples = [
+                        "Example 1:\nHuman instruction: Put both an toy airplane and a bowl onto the black table.\nOutput: {'language_plan': 'To achieve the goal, the robot must locate the toy airplane and the bowl in the room and then move each item to the black table. There are two tables in the room, and the robot identifies table 1 as the black table. Therefore, the objective is to place both objects on table 1. The plan is as follows: first, navigate to the sofa, pick up the airplane, move to table 1, and place the airplane there. Then, proceed to table 2, where the bowl might be, pick up the bowl, return to table 1, and set the bowl there.', 'executable_plan': [{'action_id': 12, 'action_name': 'navigate to the sofa', 'expected_observation': 'The robot is near the sofa.'}, {'action_id': 47, 'action_name': 'pick up the toy airplane', 'expected_observation': 'The toy airplane is picked up by the robot.'}, {'action_id': 6, 'action_description': 'navigate to the table 1', 'expected_observation': 'The robot is near the table 1.'}, {'action_id': 50, 'action_description': 'place at the table 1', 'expected_observation': 'The toy airplane is placed on the table 1.'}, {'action_id': 7, 'action_description': 'navigate to the table 2', 'expected_observation': 'The robot is near the table 2.'}, {'action_id': 42, 'action_description': 'pick up the bowl', 'expected_observation': 'The bowl is picked up by the robot.'}, {'action_id': 6, 'action_description': 'navigate to the table 1', 'expected_observation': 'The robot is near the table 1.'}, {'action_id': 50, 'action_description': 'place at the table 1', 'expected_observation': 'The bowl is placed on the table 1.'}]}\n\n",
+                        "Example 2:\nHuman instruction: I made a mistake and left the fridge open. Can you assist me by closing it?\nOutput: {'language_plan': 'The objective is for the robot to close the refrigerator. To do so, the robot first navigates to the refrigerator and then closes it.', 'executable_plan': [{'action_id': 13, 'action_name': 'navigate to the refrigerator', 'expected_observation': 'The robot is near the refrigerator.'}, {'action_id': 61, 'action_name': 'close the refrigerator', 'expected_observation': 'The refrigerator is closed.'}]}\n\n"
+                    ] 
+                    prompt += "You should generate at most 5 actions in the plan. Additionally, in order to verify if your plan is correct, you need to output your expected observation(discribed in text) after executing each action in the plan. Here are some examples:\n\n" + examples[0] + examples[1]
+        # print(prompt)
         return prompt
     
 
@@ -159,9 +172,11 @@ class VLMPlanner():
         return action
     
     def json_to_action(self, output_text, json_key='executable_plan'):
+        eobs = None
         try:
             json_object = json.loads(output_text)
             action = [x[self.action_key] for x in json_object[json_key]]
+            eobs = [x.get('expected_observation', '') for x in json_object[json_key]]
             if not len(action):
                 print('empty plan, stop here')
                 action = -2
@@ -184,7 +199,7 @@ class VLMPlanner():
             print("An unexpected error occurred:", e)
             self.output_json_error += 1
             action = -1
-        return action
+        return action, eobs
 
     
         
@@ -194,9 +209,9 @@ class VLMPlanner():
         # fix common generated json errors
         out = fix_json(out)
         logger.debug(f"Model Output:\n{out}\n")
-        action = self.json_to_action(out)
+        action, eobs = self.json_to_action(out)
         self.planner_steps += 1
-        return action, out
+        return action, out, eobs
 
 
     def act(self, observation, user_instruction):
@@ -255,9 +270,9 @@ class VLMPlanner():
                 "content": [{"type": "text", "text": out}],
                 }
             )
-        action = self.json_to_action(out)
+        action, eobs = self.json_to_action(out)
         self.planner_steps += 1
-        return action, out
+        return action, out, eobs
 
     def update_info(self, info):
         """Update episode feedback history."""

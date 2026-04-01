@@ -21,6 +21,87 @@ example_path = os.path.join(os.path.dirname(__file__), 'config/habitat_examples.
 examples = json.load(open(example_path, 'r+'))
 system_prompt = habitat_system_prompt
 
+# import requests
+# def validate_eobs(eobs_single, obs_path):
+#     BASE_URL = "http://localhost:8900"
+#     """Rerank mixed text+image documents."""
+
+#     resp = requests.post(f"{BASE_URL}/rerank", json={
+#         "query": eobs_single,
+#         "documents": [
+#             {"image": "file://" + os.path.abspath(obs_path)},
+#         ],
+#     })
+#     resp.raise_for_status()
+#     data = resp.json()
+
+#     score = 0.0
+#     print("=== Multimodal Rerank ===")
+#     for item in data["scores"]:
+#         if 'score' in item:
+#             score = item['score']
+#         break
+    
+#     return score
+def encode_base64(image_path):
+    import base64
+    with open(image_path, "rb") as f:
+        encoded_string = base64.b64encode(f.read()).decode("utf-8")
+    return encoded_string
+from openai import OpenAI
+client = OpenAI(
+    api_key="sk-ae6624a5b29848ed87132c9c7e8a375c",
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+def validate_eobs(action_str, eobs_single, obs_path):
+    message = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{encode_base64(obs_path)}"
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": f"The given image is the environment observation after executing action '{action_str}', check if the observation is consistent with the expected textual observation '{eobs_single}'. First, describe the environment state and reason carefully, then gives your answer(choose between yes or no) in <answer></answer> tag."
+                }
+            ]
+        }
+    ]
+    chat_response = client.chat.completions.create(
+        # model="/home/hyzheng2/QYProjects/models/Qwen/Qwen3.5-2B",
+        model="qwen3-vl-plus",
+        messages=message,
+        max_tokens=2048,
+        # temperature=0.6,
+        # top_p=0.95,
+        # presence_penalty=0.0,
+        # extra_body={
+        #     "repetition_penalty": 1.0,
+        #     "top_k": 20,
+        #     "min_p": 0.0,
+        #     "enable_thinking": True,
+        # }
+    )
+    try:
+        # response_text = chat_response.choices[0].message.reasoning
+        response_text = chat_response.choices[0].message.content
+        if "<answer>" not in response_text or "</answer>" not in response_text:
+            # Fallback behavior
+            if 'yes' in response_text.lower():
+                answer = "yes"
+            else:
+                answer = "no"
+        else:
+            answer = response_text.split("<answer>")[1].split("</answer>")[0].strip().lower()
+    except Exception as e:
+        response_text = str(chat_response) + str(e)
+        answer = "no"
+    return answer, response_text
+
 
 class EB_HabitatEvaluator():
     def __init__(self, config):
@@ -41,13 +122,21 @@ class EB_HabitatEvaluator():
                 self.config['multistep'] = 0
         
         
-    def save_episode_metric(self, episode_info):
+    def save_episode_metric(self, episode_info, eocv_info):
         filename = 'episode_{}_final_res.json'.format(self.env._current_episode_num)
         res_path = os.path.join(self.env.log_path, 'results')
         if not os.path.exists(res_path):
             os.makedirs(res_path)
         with open(os.path.join(res_path, filename), 'w', encoding='utf-8') as f:
             json.dump(episode_info, f, ensure_ascii=False)
+        
+        if os.getenv("EXTRA_EOCV"):
+            eocv_res_path = os.path.join(self.env.log_path, 'eocv_results')
+            if not os.path.exists(eocv_res_path):
+                os.makedirs(eocv_res_path)
+            eocv_fn = 'episode_{}_eocv.json'.format(self.env._current_episode_num)
+            with open(os.path.join(eocv_res_path, eocv_fn), 'w', encoding='utf-8') as f:
+                json.dump(eocv_info, f, indent=4, ensure_ascii=False)
 
     def evaluate_main(self):
         valid_eval_sets = self.config.get('eval_sets', ValidEvalSets)
@@ -86,10 +175,13 @@ class EB_HabitatEvaluator():
 
             self.planner.reset()
             done = False
+            eocv_info = []
             while not done:
                 try: 
-                    action, reasoning = self.planner.act(img_path, user_instruction)
+                    action, reasoning, eobs = self.planner.act(img_path, user_instruction)
                     print(f"Planner Output Action: {action}")
+                    if os.getenv("EXTRA_EOCV") and eobs is not None:
+                        print(f"Planner Expected Observation: {eobs}")
 
                     if action == -2: # empty plan stop here
                         episode_info['empty_plan'] = 1
@@ -127,7 +219,13 @@ class EB_HabitatEvaluator():
                         continue
                     # multiple actions
                     if type(action) == list:
-                        for action_single in action[:min(self.env._max_episode_steps - self.env._current_step, len(action))]:
+                        if os.getenv("EXTRA_MULTI_STEP"):
+                            action_lim = 5
+                        elif os.getenv("EXTRA_ONE_STEP"):
+                            action_lim = 1
+                        else:
+                            action_lim = 1000
+                        for idx, action_single in enumerate(action[:min(self.env._max_episode_steps - self.env._current_step, len(action), action_lim)]):
                             obs, reward, done, info = self.env.step(action_single, reasoning=reasoning)
                             action_str = action_single if type(action_single) == str else self.env.language_skill_set[action_single]
                             print(f"Executed action: {action_str}, Task success: {info['task_success']}")
@@ -138,6 +236,24 @@ class EB_HabitatEvaluator():
                             img_path = self.env.save_image(obs)
                             episode_info['reward'].append(reward)
                             episode_info['num_invalid_actions'] += (info['last_action_success'] == 0)
+
+                            if os.getenv("EXTRA_EOCV") and eobs is not None and idx < len(eobs):
+                                eobs_single = eobs[idx]
+                                answer, full_output = validate_eobs(action_str, eobs_single, img_path)
+                                eocv_info.append({
+                                    'step': self.env._current_step,
+                                    'action': action_str,
+                                    'observation': img_path,
+                                    'feedback': info['env_feedback'] if 'env_feedback' in info else '',
+                                    'eobs': eobs_single,
+                                    'eocv_answer': answer,
+                                    'eocv_full_output': full_output,
+                                    'eocv_pass': answer == "yes",
+                                })
+                                if answer != "yes":
+                                    print("EOCV check failed. Replanning ...")
+                                    break
+                            # if done:
                             if done or info['last_action_success'] == 0:
                                 # stop or replanning
                                 print("Invalid action or task complete. If invalid then Replanning.")
@@ -158,6 +274,17 @@ class EB_HabitatEvaluator():
                     print(e)
                     time.sleep(30)
 
+            temp_usage_path = os.path.join(self.env.log_path, 'results')
+            os.makedirs(temp_usage_path, exist_ok=True)
+            json.dump({
+                    'input_tokens': self.planner.model.input_tokens,
+                    'output_tokens': self.planner.model.output_tokens,
+                    'cached_tokens': self.planner.model.cached_tokens,
+                }, 
+                open(os.path.join(temp_usage_path, f'total_token_usage.json'), 'w'), 
+                ensure_ascii=False, 
+                indent=4
+            )
             # evaluation metrics
             episode_info['instruction'] = user_instruction
             episode_info['reward'] = np.mean(episode_info['reward'])
@@ -172,7 +299,7 @@ class EB_HabitatEvaluator():
             episode_info["episode_elapsed_seconds"] = info.get("episode_elapsed_seconds", time.time() - self.env._episode_start_time)
             
             self.env.save_episode_log()
-            self.save_episode_metric(episode_info)
+            self.save_episode_metric(episode_info, eocv_info)
             progress_bar.update()
 
 

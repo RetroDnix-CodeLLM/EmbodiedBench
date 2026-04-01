@@ -8,3 +8,5 @@ EXTRA_MULTI_STEP=1 python -m embodiedbench.main env=eb-alf model_name=gpt-5-mini
 export DASHSCOPE_API_KEY="sk-ae6624a5b29848ed87132c9c7e8a375c"
 
 EXTRA_MULTI_STEP=1 python -m embodiedbench.main env=eb-alf model_name="qwen3.5-plus-2026-02-15" exp_name="native"
+
+EXTRA_EOCV=1 python -m embodiedbench.main env=eb-hab model_name=qwen3-vl-plus exp_name='eocv'
