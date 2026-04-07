@@ -2,19 +2,19 @@ vlm_generation_guide={
     "type": "object",
     "additionalProperties": False,
     'properties': {
-        "visual_state_description": {
+        "1_visual_state_description": {
             "type": "string",
             "description": "Description of current state from the visual image",
         },
-        "reasoning_and_reflection": {
+        "2_reasoning_and_reflection": {
             "type": "string",
             "description": "summarize the history of interactions and any available environmental feedback. Additionally, provide reasoning as to why the last action or plan failed and did not finish the task",
         },
-        "language_plan": {
+        "3_language_plan": {
             "type": "string",
             "description": "The list of actions to achieve the user instruction. Each action is started by the step number and the action name",
         },
-        "executable_plan": {
+        "4_executable_plan": {
             "type": "array",
             "description": "A list of actions needed to achieve the user instruction, with each action having an action ID and a name. Do not output empty list.",
             "items": {
@@ -33,7 +33,7 @@ vlm_generation_guide={
             }
         },
     },
-    "required": ["visual_state_description", "reasoning_and_reflection", "language_plan", "executable_plan"]
+    "required": ["1_visual_state_description", "2_reasoning_and_reflection", "3_language_plan", "4_executable_plan"]
 }
 
 llm_generation_guide={

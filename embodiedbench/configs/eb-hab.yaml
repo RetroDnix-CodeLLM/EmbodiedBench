@@ -3,7 +3,7 @@ model_name: gpt-4o-mini
 down_sample_ratio: 1
 model_type: remote
 language_only: False
-eval_sets: []
+eval_sets: ['base']
 chat_history: False
 n_shots: 10
 multistep: False

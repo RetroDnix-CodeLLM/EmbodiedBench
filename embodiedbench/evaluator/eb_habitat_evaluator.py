@@ -10,6 +10,14 @@ from embodiedbench.evaluator.evaluator_utils import load_saved_data, update_conf
 from embodiedbench.evaluator.config.system_prompts import habitat_system_prompt
 from embodiedbench.main import logger
 
+from PIL import Image
+import imagehash
+
+def perceptually_same(p1, p2, threshold=5):
+    h1 = imagehash.phash(Image.open(p1))
+    h2 = imagehash.phash(Image.open(p2))
+    return (h1 - h2) <= threshold  # 汉明距离
+
 link_path = os.path.join(os.path.dirname(__file__), '../envs/eb_habitat/data')
 try:
     os.symlink(link_path, 'data')
@@ -175,6 +183,7 @@ class EB_HabitatEvaluator():
 
             self.planner.reset()
             done = False
+            last_obs_path = None
             eocv_info = []
             while not done:
                 try: 
@@ -227,6 +236,7 @@ class EB_HabitatEvaluator():
                             action_lim = 1000
                         for idx, action_single in enumerate(action[:min(self.env._max_episode_steps - self.env._current_step, len(action), action_lim)]):
                             obs, reward, done, info = self.env.step(action_single, reasoning=reasoning)
+                            
                             action_str = action_single if type(action_single) == str else self.env.language_skill_set[action_single]
                             print(f"Executed action: {action_str}, Task success: {info['task_success']}")
                             logger.debug(f"reward: {reward}")
@@ -239,7 +249,14 @@ class EB_HabitatEvaluator():
 
                             if os.getenv("EXTRA_EOCV") and eobs is not None and idx < len(eobs):
                                 eobs_single = eobs[idx]
-                                answer, full_output = validate_eobs(action_str, eobs_single, img_path)
+
+                                # Quick Validate
+                                if last_obs_path is not None and perceptually_same(last_obs_path, img_path):
+                                    # Last obs is same as current obs, action is likely invalid, skip EOCV check to save time
+                                    answer = "no"
+                                    full_output = "Quick skip EOCV check due to same observation as last step."
+                                else:
+                                    answer, full_output = validate_eobs(action_str, eobs_single, img_path)
                                 eocv_info.append({
                                     'step': self.env._current_step,
                                     'action': action_str,
@@ -253,8 +270,9 @@ class EB_HabitatEvaluator():
                                 if answer != "yes":
                                     print("EOCV check failed. Replanning ...")
                                     break
-                            # if done:
-                            if done or info['last_action_success'] == 0:
+                            last_obs_path = img_path
+                            if done:
+                            # if done or info['last_action_success'] == 0:
                                 # stop or replanning
                                 print("Invalid action or task complete. If invalid then Replanning.")
                                 break

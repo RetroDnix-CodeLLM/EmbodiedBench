@@ -171,7 +171,7 @@ class VLMPlanner():
             action = np.random.randint(len(self.actions))
         return action
     
-    def json_to_action(self, output_text, json_key='executable_plan'):
+    def json_to_action(self, output_text, json_key='4_executable_plan'):
         eobs = None
         try:
             json_object = json.loads(output_text)

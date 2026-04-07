@@ -214,7 +214,7 @@ class RemoteModel:
             self.output_tokens += usage.completion_tokens
             if usage.prompt_tokens_details is not None and isinstance(usage.prompt_tokens_details.cached_tokens, int):
                 self.cached_tokens += usage.prompt_tokens_details.cached_tokens
-
+        print(out)
         return out
     
     def _call_qwen7b(self, message_history: list):
