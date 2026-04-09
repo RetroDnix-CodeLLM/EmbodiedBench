@@ -3,9 +3,9 @@ import json
 from pathlib import Path
 
 data_base = [
-    "/home/hyzheng2/QYProjects/EmbodiedBench/running/eb_habitat/qwen3-vl-plus_eocv-0401-093507",
-    "/home/hyzheng2/QYProjects/EmbodiedBench/running/eb_habitat/qwen3-vl-plus_multi-step-0401-022525",
-    "/home/hyzheng2/QYProjects/EmbodiedBench/running/eb_habitat/qwen3-vl-plus_react-0401-022525"
+    "running/eb_habitat/qwen3-vl-plus_eocv-0408-133442_ord",
+    "running/eb_habitat/qwen3-vl-plus_react-0408-221710_ord",
+    "running/eb_habitat/qwen3-vl-plus_multi-step-0401-140724_ord"
 ]
 
 for base in data_base:

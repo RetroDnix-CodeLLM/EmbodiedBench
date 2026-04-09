@@ -10,14 +10,6 @@ from embodiedbench.evaluator.evaluator_utils import load_saved_data, update_conf
 from embodiedbench.evaluator.config.system_prompts import habitat_system_prompt
 from embodiedbench.main import logger
 
-from PIL import Image
-import imagehash
-
-def perceptually_same(p1, p2, threshold=5):
-    h1 = imagehash.phash(Image.open(p1))
-    h2 = imagehash.phash(Image.open(p2))
-    return (h1 - h2) <= threshold  # 汉明距离
-
 link_path = os.path.join(os.path.dirname(__file__), '../envs/eb_habitat/data')
 try:
     os.symlink(link_path, 'data')
@@ -56,12 +48,30 @@ def encode_base64(image_path):
     with open(image_path, "rb") as f:
         encoded_string = base64.b64encode(f.read()).decode("utf-8")
     return encoded_string
+
 from openai import OpenAI
 client = OpenAI(
     api_key="sk-ae6624a5b29848ed87132c9c7e8a375c",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
 )
-def validate_eobs(action_str, eobs_single, obs_path):
+eocv_input_tokens = 0
+eocv_output_tokens = 0
+eocv_cached_tokens = 0
+EOBS_PROMPT_DUOBLE_FRAME = """
+The first image shows the original environment state, while the second image shows the environment state after executing an action '{action_str}', check if the observation is consistent with the expected textual observation '{eobs_single}'. 
+
+First, describe the environment state and reason carefully, then gives your answer(choose between yes or no) in <answer></answer> tag. 
+
+Possible actions: 
+1. Pick: picks up object from nearby locations. You should focus on the suction cup gripper of the robot arm. If the intend object is isolated or not present in the first frame, and close to the arm in the second frame, you can decide the object is picked up.
+2. Place: places object in a specified location. You should focus on the specified location. If the location is present in the frame, and something is placed to the location in the second frame, you can decide the object is placed.
+3. Open: open the specific receptacle. You should focus on the state of the receptacle. If the door of the receptacle is closed in the first frame, and open in the second frame, you can decide the receptacle is opened.
+4. Close: close the specific receptacle. You should focus on the state of the receptacle. If the door of the receptacle is open in the first frame, and closed in the second frame, you can decide the receptacle is closed.
+
+Note: 
+the action can be invalid and failed, this way you will likely see no change in the environment before and after the action, and in this case the correct answer should be no.
+"""
+def validate_eobs(action_str, eobs_single, last_frame_path, current_frame_path):
     message = [
         {
             "role": "user",
@@ -69,14 +79,22 @@ def validate_eobs(action_str, eobs_single, obs_path):
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:image/jpeg;base64,{encode_base64(obs_path)}"
-                    }
+                        "url": f"data:image/jpeg;base64,{encode_base64(last_frame_path)}"
+                    },
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{encode_base64(current_frame_path)}"
+                    },
                 },
                 {
                     "type": "text",
-                    "text": f"The given image is the environment observation after executing action '{action_str}', check if the observation is consistent with the expected textual observation '{eobs_single}'. First, describe the environment state and reason carefully, then gives your answer(choose between yes or no) in <answer></answer> tag."
-                }
-            ]
+                    "text": EOBS_PROMPT_DUOBLE_FRAME.format(
+                        action_str=action_str, eobs_single=eobs_single
+                    ),
+                },
+            ],
         }
     ]
     chat_response = client.chat.completions.create(
@@ -94,6 +112,11 @@ def validate_eobs(action_str, eobs_single, obs_path):
         #     "enable_thinking": True,
         # }
     )
+    if usage := getattr(chat_response, "usage", None):
+        eocv_input_tokens += usage.prompt_tokens
+        eocv_output_tokens += usage.completion_tokens
+        if usage.prompt_tokens_details is not None and isinstance(usage.prompt_tokens_details.cached_tokens, int):
+            eocv_cached_tokens += usage.prompt_tokens_details.cached_tokens
     try:
         # response_text = chat_response.choices[0].message.reasoning
         response_text = chat_response.choices[0].message.content
@@ -178,12 +201,12 @@ class EB_HabitatEvaluator():
             episode_info = {'reward': [], 'num_invalid_actions': 0, 'empty_plan': 0}
             obs = self.env.reset()
             img_path = self.env.save_image(obs)
+            last_obs_path = img_path
             user_instruction = self.env.episode_language_instruction
             print(f"Instruction: {user_instruction}")
 
             self.planner.reset()
             done = False
-            last_obs_path = None
             eocv_info = []
             while not done:
                 try: 
@@ -206,7 +229,7 @@ class EB_HabitatEvaluator():
                             'subgoal_reward': episode_info.get("subgoal_reward", 0),
                             'env_step': self.env._current_step,
                         }
-                        break 
+                        break
                     if action == -1:
                         self.env._cur_invalid_actions += 1
                         episode_info['reward'].append(-1)
@@ -247,16 +270,9 @@ class EB_HabitatEvaluator():
                             episode_info['reward'].append(reward)
                             episode_info['num_invalid_actions'] += (info['last_action_success'] == 0)
 
-                            if os.getenv("EXTRA_EOCV") and eobs is not None and idx < len(eobs):
+                            if os.getenv("EXTRA_EOCV") and eobs is not None and idx < len(eobs) and not action_str.lower().startswith("navigate"):
                                 eobs_single = eobs[idx]
-
-                                # Quick Validate
-                                if last_obs_path is not None and perceptually_same(last_obs_path, img_path):
-                                    # Last obs is same as current obs, action is likely invalid, skip EOCV check to save time
-                                    answer = "no"
-                                    full_output = "Quick skip EOCV check due to same observation as last step."
-                                else:
-                                    answer, full_output = validate_eobs(action_str, eobs_single, img_path)
+                                answer, full_output = validate_eobs(action_str, eobs_single, last_obs_path, img_path)
                                 eocv_info.append({
                                     'step': self.env._current_step,
                                     'action': action_str,
@@ -298,6 +314,9 @@ class EB_HabitatEvaluator():
                     'input_tokens': self.planner.model.input_tokens,
                     'output_tokens': self.planner.model.output_tokens,
                     'cached_tokens': self.planner.model.cached_tokens,
+                    'eocv_input_tokens': eocv_input_tokens,
+                    'eocv_output_tokens': eocv_output_tokens,
+                    'eocv_cached_tokens': eocv_cached_tokens,
                 }, 
                 open(os.path.join(temp_usage_path, f'total_token_usage.json'), 'w'), 
                 ensure_ascii=False, 

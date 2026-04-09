@@ -17,7 +17,7 @@ alfred_system_prompt = '''## You are a robot operating in a home. Given a task, 
 {}
 
 ## Guidelines
-1. **Output Plan**: Avoid generating empty plan. Each plan should include no more than 20 actions.
+1. **Output Plan**: Avoid generating empty plan.
 2. **Visibility**: Always locate a visible object by the 'find' action before interacting with it.
 3. **Action Guidelines**: Make sure match the action name and its corresponding action id in the output.\n Avoid performing actions that do not meet the defined validity criteria. For instance, if you want to put object in a receptacle, use 'put down' rather than 'drop' actions. 
 4. **Prevent Repeating Action Sequences**: Do not repeatedly execute the same action or sequence of actions.\n Try to modify the action sequence because previous actions do not lead to success.
@@ -39,7 +39,7 @@ habitat_system_prompt = '''## You are a robot operating in a home. Given a task,
 {}
 
 ## Guidelines
-1. **Output Plan**: Avoid generating empty plan. Each plan should include no more than 20 actions.
+1. **Output Plan**: The task is not done yet, avoid generating empty plan.
 2. **Visibility**: If an object is not currently visible, use the "Navigation" action to locate it or its receptacle before attempting other operations.
 3. **Action Validity**: Make sure match the action name and its corresponding action id in the output.\n Avoid performing actions that do not meet the defined validity criteria. 
 4. **Prevent Repeating Action Sequences**: Do not repeatedly execute the same action or sequence of actions.\n Try to modify the action sequence because previous actions do not lead to success.
