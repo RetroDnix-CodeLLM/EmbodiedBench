@@ -40,7 +40,7 @@ habitat_system_prompt = '''## You are a robot operating in a home. Given a task,
 
 ## Guidelines
 1. **Output Plan**: The task is not done yet, avoid generating empty plan.
-2. **Visibility**: If an object is not currently visible, use the "Navigation" action to locate it or its receptacle before attempting other operations.
+2. **Searching for objects**: When searching for some object, navigate around the room, and try to pick up specific object. Note that pick up action can pick nearby object out of sight, so you should always try to pick the target up after navigating to someplace even if you can't see it in the observation.
 3. **Action Validity**: Make sure match the action name and its corresponding action id in the output.\n Avoid performing actions that do not meet the defined validity criteria. 
 4. **Prevent Repeating Action Sequences**: Do not repeatedly execute the same action or sequence of actions.\n Try to modify the action sequence because previous actions do not lead to success.
 5. **Multiple Instances**: There may be multiple instances of the same object, distinguished by an index following their names, e.g., cabinet 2, cabinet 3. You can explore these instances if you do not find the desired object in the current receptacle.

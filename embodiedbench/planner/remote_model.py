@@ -203,10 +203,9 @@ class RemoteModel:
             response_format=response_format,
             temperature=temperature,
             max_tokens=max_completion_tokens,
-            # extra_body={
-            #     'enable_thinking': True,
-            #     "thinking_budget": 2048
-            # }
+            extra_body={
+                'enable_thinking': False,
+            }
         )
         out = response.choices[0].message.content
         if usage := getattr(response, "usage", None):

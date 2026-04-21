@@ -64,7 +64,7 @@ class VLMPlanner():
                 if os.getenv("EXTRA_MULTI_STEP") != None:
                     prompt += "You should generate at most 5 actions in the plan."
                 elif os.getenv("EXTRA_ONE_STEP") != None:
-                    prompt += "You are required to generate only 1 action for the plan. Reflection on the current state and your previous actions, decide the best action to take at the current step, and do not output more than 1 action."
+                    prompt += "You are required to generate only 1 action for the plan. Note again that when finding some object, you should always try to pick the target up after navigating to someplace even if you can't see it in the observation."
                 elif os.getenv("EXTRA_EOCV") != None:
                     examples = [
                         "Example 1:\nHuman instruction: Put both an toy airplane and a bowl onto the black table.\nOutput: {'language_plan': 'To achieve the goal, the robot must locate the toy airplane and the bowl in the room and then move each item to the black table. There are two tables in the room, and the robot identifies table 1 as the black table. Therefore, the objective is to place both objects on table 1. The plan is as follows: first, navigate to the sofa, pick up the airplane, move to table 1, and place the airplane there. Then, proceed to table 2, where the bowl might be, pick up the bowl, return to table 1, and set the bowl there.', 'executable_plan': [{'action_id': 12, 'action_name': 'navigate to the sofa', 'expected_observation': 'The robot is near the sofa.'}, {'action_id': 47, 'action_name': 'pick up the toy airplane', 'expected_observation': 'The toy airplane is picked up by the robot.'}, {'action_id': 6, 'action_description': 'navigate to the table 1', 'expected_observation': 'The robot is near the table 1.'}, {'action_id': 50, 'action_description': 'place at the table 1', 'expected_observation': 'The toy airplane is placed on the table 1.'}, {'action_id': 7, 'action_description': 'navigate to the table 2', 'expected_observation': 'The robot is near the table 2.'}, {'action_id': 42, 'action_description': 'pick up the bowl', 'expected_observation': 'The bowl is picked up by the robot.'}, {'action_id': 6, 'action_description': 'navigate to the table 1', 'expected_observation': 'The robot is near the table 1.'}, {'action_id': 50, 'action_description': 'place at the table 1', 'expected_observation': 'The bowl is placed on the table 1.'}]}\n\n",
@@ -105,7 +105,7 @@ class VLMPlanner():
                 if os.getenv("EXTRA_MULTI_STEP") != None:
                     prompt += "You should generate at most 5 actions in the plan."
                 elif os.getenv("EXTRA_ONE_STEP") != None:
-                    prompt += "Unlike the examples, you are required to generate only 1 action for the plan."
+                    prompt += "Unlike the examples, you are required to generate only 1 action for the plan. Note again that when finding some object, you should always try to pick the target up after navigating to someplace even if you can't see it in the observation."
                 elif os.getenv("EXTRA_EOCV") != None:
                     examples = [
                         "Example 1:\nHuman instruction: Put both an toy airplane and a bowl onto the black table.\nOutput: {'language_plan': 'To achieve the goal, the robot must locate the toy airplane and the bowl in the room and then move each item to the black table. There are two tables in the room, and the robot identifies table 1 as the black table. Therefore, the objective is to place both objects on table 1. The plan is as follows: first, navigate to the sofa, pick up the airplane, move to table 1, and place the airplane there. Then, proceed to table 2, where the bowl might be, pick up the bowl, return to table 1, and set the bowl there.', 'executable_plan': [{'action_id': 12, 'action_name': 'navigate to the sofa', 'expected_observation': 'The robot is near the sofa.'}, {'action_id': 47, 'action_name': 'pick up the toy airplane', 'expected_observation': 'The toy airplane is picked up by the robot.'}, {'action_id': 6, 'action_description': 'navigate to the table 1', 'expected_observation': 'The robot is near the table 1.'}, {'action_id': 50, 'action_description': 'place at the table 1', 'expected_observation': 'The toy airplane is placed on the table 1.'}, {'action_id': 7, 'action_description': 'navigate to the table 2', 'expected_observation': 'The robot is near the table 2.'}, {'action_id': 42, 'action_description': 'pick up the bowl', 'expected_observation': 'The bowl is picked up by the robot.'}, {'action_id': 6, 'action_description': 'navigate to the table 1', 'expected_observation': 'The robot is near the table 1.'}, {'action_id': 50, 'action_description': 'place at the table 1', 'expected_observation': 'The bowl is placed on the table 1.'}]}\n\n",
@@ -171,7 +171,7 @@ class VLMPlanner():
             action = np.random.randint(len(self.actions))
         return action
     
-    def json_to_action(self, output_text, json_key='4_executable_plan'):
+    def json_to_action(self, output_text, json_key='executable_plan'):
         eobs = None
         try:
             json_object = json.loads(output_text)

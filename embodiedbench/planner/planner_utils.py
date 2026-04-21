@@ -18,7 +18,7 @@ The fields in above JSON follows the purpose below:
 '''
 
 template = '''
-The output json format should be {'1_visual_state_description':str, '2_reasoning_and_reflection':str, '3_language_plan':str, '4_executable_plan':List[{'action_id':int, 'action_name':str}...]}
+The output json format should be {'visual_state_description':str, 'reasoning_and_reflection':str, 'language_plan':str, 'executable_plan':List[{'action_id':int, 'action_name':str}...]}
 The fields in above JSON follows the purpose below:
 1. visual_state_description is for description of current state from the visual image, 
 2. reasoning_and_reflection is for summarizing the history of interactions and any available environmental feedback. Additionally, provide reasoning as to why the last action or plan failed and did not finish the task, 

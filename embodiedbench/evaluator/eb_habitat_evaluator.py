@@ -72,6 +72,7 @@ Note:
 the action can be invalid and failed, this way you will likely see no change in the environment before and after the action, and in this case the correct answer should be no.
 """
 def validate_eobs(action_str, eobs_single, last_frame_path, current_frame_path):
+    global eocv_input_tokens, eocv_output_tokens, eocv_cached_tokens
     message = [
         {
             "role": "user",
@@ -216,20 +217,23 @@ class EB_HabitatEvaluator():
                         print(f"Planner Expected Observation: {eobs}")
 
                     if action == -2: # empty plan stop here
-                        episode_info['empty_plan'] = 1
-                        self.env.episode_log.append({
-                            'last_action_success': 0.0,
-                            'action_id': -2,
-                            'action_description': 'empty plan',
-                            'reasoning': reasoning,
-                        })
-                        info = {
-                            'task_success': episode_info.get('task_success', 0),
-                            'task_progress': episode_info.get("task_progress", 0),
-                            'subgoal_reward': episode_info.get("subgoal_reward", 0),
-                            'env_step': self.env._current_step,
-                        }
-                        break
+                        if len(self.planner.episode_act_feedback) > 0:
+                            self.planner.episode_act_feedback[-1]['env_feedback'] += "Task not done yet, avoid output empty plan."
+                        else:
+                            episode_info['empty_plan'] = 1
+                            self.env.episode_log.append({
+                                'last_action_success': 0.0,
+                                'action_id': -2,
+                                'action_description': 'empty plan',
+                                'reasoning': reasoning,
+                            })
+                            info = {
+                                'task_success': episode_info.get('task_success', 0),
+                                'task_progress': episode_info.get("task_progress", 0),
+                                'subgoal_reward': episode_info.get("subgoal_reward", 0),
+                                'env_step': self.env._current_step,
+                            }
+                            break
                     if action == -1:
                         self.env._cur_invalid_actions += 1
                         episode_info['reward'].append(-1)
@@ -257,7 +261,8 @@ class EB_HabitatEvaluator():
                             action_lim = 1
                         else:
                             action_lim = 1000
-                        for idx, action_single in enumerate(action[:min(self.env._max_episode_steps - self.env._current_step, len(action), action_lim)]):
+                        action_length = min(self.env._max_episode_steps - self.env._current_step, len(action), action_lim)
+                        for idx, action_single in enumerate(action[:action_length]):
                             obs, reward, done, info = self.env.step(action_single, reasoning=reasoning)
                             
                             action_str = action_single if type(action_single) == str else self.env.language_skill_set[action_single]
@@ -270,7 +275,7 @@ class EB_HabitatEvaluator():
                             episode_info['reward'].append(reward)
                             episode_info['num_invalid_actions'] += (info['last_action_success'] == 0)
 
-                            if os.getenv("EXTRA_EOCV") and eobs is not None and idx < len(eobs) and not action_str.lower().startswith("navigate"):
+                            if os.getenv("EXTRA_EOCV") and eobs is not None and idx < len(eobs) and not action_str.lower().startswith("navigate") and not idx == action_length - 1: # only validate non-navigate actions and not the last action which is more likely to be affected by the following actions
                                 eobs_single = eobs[idx]
                                 answer, full_output = validate_eobs(action_str, eobs_single, last_obs_path, img_path)
                                 eocv_info.append({
