@@ -51,7 +51,7 @@ def encode_base64(image_path):
 
 from openai import OpenAI
 client = OpenAI(
-    api_key="sk-ae6624a5b29848ed87132c9c7e8a375c",
+    api_key="sk-15462b7fd1b146d4ab90072b2dbb881d",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
 )
 eocv_input_tokens = 0
@@ -100,18 +100,18 @@ def validate_eobs(action_str, eobs_single, last_frame_path, current_frame_path):
     ]
     chat_response = client.chat.completions.create(
         # model="/home/hyzheng2/QYProjects/models/Qwen/Qwen3.5-2B",
-        model="qwen3-vl-plus",
+        model="qwen3.6-plus",
         messages=message,
         max_tokens=2048,
-        # temperature=0.6,
+        temperature=0.0,
         # top_p=0.95,
         # presence_penalty=0.0,
-        # extra_body={
-        #     "repetition_penalty": 1.0,
-        #     "top_k": 20,
-        #     "min_p": 0.0,
-        #     "enable_thinking": True,
-        # }
+        extra_body={
+            # "repetition_penalty": 1.0,
+            # "top_k": 20,
+            # "min_p": 0.0,
+            "enable_thinking": False,
+        }
     )
     if usage := getattr(chat_response, "usage", None):
         eocv_input_tokens += usage.prompt_tokens
@@ -258,7 +258,7 @@ class EB_HabitatEvaluator():
                         if os.getenv("EXTRA_MULTI_STEP"):
                             action_lim = 5
                         elif os.getenv("EXTRA_ONE_STEP"):
-                            action_lim = 1
+                                action_lim = 1
                         else:
                             action_lim = 1000
                         action_length = min(self.env._max_episode_steps - self.env._current_step, len(action), action_lim)

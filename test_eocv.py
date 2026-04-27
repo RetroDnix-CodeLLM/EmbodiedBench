@@ -130,6 +130,8 @@ def validate_eobs_2(action_str, eobs_single, last_frame_path, current_frame_path
     )
 
     response_text = chat_response.choices[0].message.content
+    if usage := getattr(chat_response, "usage", None):
+        print("Usage Details: ", usage)
     print(response_text)
 
 
@@ -164,11 +166,17 @@ if __name__ == "__main__":
             "current_frame_path": "/home/hyzheng2/QYProjects/EmbodiedBench/running/eb_habitat/qwen3-vl-plus_eocv-0409-010146_ord/base/images/episode_6/episode_6_step_2.png",
         }
     ]
-    for case in test_cases:
-        print(case['name'])
-        validate_eobs(case['action_str'], case['eobs_single'], case['current_frame_path'])
-        print("-" * 50)
-        validate_eobs_2(
-            case['action_str'], case['eobs_single'], case['last_frame_path'], case['current_frame_path']
-        )
-        print("\n\n")
+    validate_eobs_2(
+        test_cases[0]['action_str'], 
+        test_cases[0]['eobs_single'], 
+        test_cases[0]['last_frame_path'], 
+        test_cases[0]['current_frame_path']
+    )
+    # for case in test_cases:
+    #     print(case['name'])
+    #     validate_eobs(case['action_str'], case['eobs_single'], case['current_frame_path'])
+    #     print("-" * 50)
+    #     validate_eobs_2(
+    #         case['action_str'], case['eobs_single'], case['last_frame_path'], case['current_frame_path']
+    #     )
+    #     print("\n\n")
