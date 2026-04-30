@@ -58,7 +58,7 @@ eocv_input_tokens = 0
 eocv_output_tokens = 0
 eocv_cached_tokens = 0
 EOBS_PROMPT_DUOBLE_FRAME = """
-The first image shows the original environment state, while the second image shows the environment state after executing an action '{action_str}', check if the observation is consistent with the expected textual observation '{eobs_single}'. 
+The image shows the environment state after executing an action '{action_str}', check if the observation is consistent with the expected textual observation '{eobs_single}'. 
 
 First, describe the environment state and reason carefully, then gives your answer(choose between yes or no) in <answer></answer> tag. 
 
@@ -77,12 +77,12 @@ def validate_eobs(action_str, eobs_single, last_frame_path, current_frame_path):
         {
             "role": "user",
             "content": [
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{encode_base64(last_frame_path)}"
-                    },
-                },
+                # {
+                #     "type": "image_url",
+                #     "image_url": {
+                #         "url": f"data:image/jpeg;base64,{encode_base64(last_frame_path)}"
+                #     },
+                # },
                 {
                     "type": "image_url",
                     "image_url": {

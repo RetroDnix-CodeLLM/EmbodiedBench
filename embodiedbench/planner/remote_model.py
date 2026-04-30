@@ -201,7 +201,7 @@ class RemoteModel:
             model=self.model_name,
             messages=message_history,
             response_format=response_format,
-            temperature=temperature,
+            # temperature=temperature,
             max_tokens=max_completion_tokens,
             extra_body={
                 'enable_thinking': False,

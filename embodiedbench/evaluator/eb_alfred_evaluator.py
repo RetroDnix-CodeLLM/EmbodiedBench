@@ -15,6 +15,102 @@ react_example_path = os.path.join(os.path.dirname(__file__), 'config/alfred_reac
 exploration_example_path = os.path.join(os.path.dirname(__file__), 'config/alfred_long_horizon_examples.json')
 system_prompt = alfred_system_prompt
 
+def encode_base64(image_path):
+    import base64
+    with open(image_path, "rb") as f:
+        encoded_string = base64.b64encode(f.read()).decode("utf-8")
+    return encoded_string
+
+from openai import OpenAI
+client = OpenAI(
+    api_key="sk-8306544ef471453db48dc7f88f61dc82",
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+)
+eocv_input_tokens = 0
+eocv_output_tokens = 0
+eocv_cached_tokens = 0
+EOBS_PROMPT_SINGLE_FRAME = """
+The image shows the state of a virtual environment after executing an action '{action_str}', check if the observation is consistent with the expected textual observation '{eobs_single}'. 
+
+First, describe the environment state and reason carefully, then gives your answer(choose between yes or no) in <answer></answer> tag. 
+
+Possible actions: 
+• Find: Parameterized by the name of the receptacle to navigate to. So long as the object is present in the scene, this skill is always valid
+• Pick up: Parameterized by the name of the object to pick. Only valid if the robot is close to the object, not holding another object, and the object is not inside a closed receptacle.
+• Put down: Parameterized by the name of the object to put down to a nearby receptacle. Only valid if the robot is holding an object.
+• Drop: Parameterized by the name of the object to put down. It is different from Put down action, as this does not guarantee the held object will be put into a specified receptacle. 
+• Open: Parameterized by the name of the receptacle to open. Only valid if the receptacle is closed and the robot is close to the receptacle.
+• Close: Parameterized by the name of the receptacle to close. Only valid if the receptacle is open and the robot is close to the receptacle.
+• Turn on: Parameterized by the name of the object to turn on. Only valid if the object is turned off and the robot is close to the object.
+• Turn off: Parameterized by the name of the object to turn off. Only valid if the object is turned on and the robot is close to the object.
+• Slice: Parameterized by the name of the object to slice. Only valid if the object is sliceable and the robot is close to the object.
+
+Note: 
+the action can be invalid and failed, this way you will likely see no change in the environment before and after the action, and in this case the correct answer should be no.
+"""
+def validate_eobs(action_str, eobs_single, last_frame_path, current_frame_path):
+    global eocv_input_tokens, eocv_output_tokens, eocv_cached_tokens
+    message = [
+        {
+            "role": "user",
+            "content": [
+                # {
+                #     "type": "image_url",
+                #     "image_url": {
+                #         "url": f"data:image/jpeg;base64,{encode_base64(last_frame_path)}"
+                #     },
+                # },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{encode_base64(current_frame_path)}"
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": EOBS_PROMPT_SINGLE_FRAME.format(
+                        action_str=action_str, eobs_single=eobs_single
+                    ),
+                },
+            ],
+        }
+    ]
+    chat_response = client.chat.completions.create(
+        # model="/home/hyzheng2/QYProjects/models/Qwen/Qwen3.5-2B",
+        model="qwen3.6-plus",
+        messages=message,
+        max_tokens=2048,
+        # temperature=0.0,
+        # top_p=0.95,
+        # presence_penalty=0.0,
+        extra_body={
+            # "repetition_penalty": 1.0,
+            # "top_k": 20,
+            # "min_p": 0.0,
+            "enable_thinking": False,
+        }
+    )
+    if usage := getattr(chat_response, "usage", None):
+        eocv_input_tokens += usage.prompt_tokens
+        eocv_output_tokens += usage.completion_tokens
+        if usage.prompt_tokens_details is not None and isinstance(usage.prompt_tokens_details.cached_tokens, int):
+            eocv_cached_tokens += usage.prompt_tokens_details.cached_tokens
+    try:
+        # response_text = chat_response.choices[0].message.reasoning
+        response_text = chat_response.choices[0].message.content
+        if "<answer>" not in response_text or "</answer>" not in response_text:
+            # Fallback behavior
+            if 'yes' in response_text.lower():
+                answer = "yes"
+            else:
+                answer = "no"
+        else:
+            answer = response_text.split("<answer>")[1].split("</answer>")[0].strip().lower()
+    except Exception as e:
+        response_text = str(chat_response) + str(e)
+        answer = "no"
+    return answer, response_text
+
 class EB_AlfredEvaluator():
     def __init__(self, config):
         self.model_name = config['model_name']
@@ -32,7 +128,7 @@ class EB_AlfredEvaluator():
                 logger.warning("Language only mode should not have multistep enabled. Setting these arguments to False ...")
                 self.config['multistep'] = 0
         
-    def save_episode_metric(self, episode_info):
+    def save_episode_metric(self, episode_info, eocv_info):
         episode_idx = self.env._current_episode_num if not len(self.env.selected_indexes) else self.env.selected_indexes[self.env._current_episode_num - 1] + 1
         filename = 'episode_{}_final_res.json'.format(episode_idx)
         res_path = os.path.join(self.env.log_path, 'results')
@@ -40,7 +136,14 @@ class EB_AlfredEvaluator():
             os.makedirs(res_path)
         with open(os.path.join(res_path, filename), 'w', encoding='utf-8') as f:
             json.dump(episode_info, f, ensure_ascii=False)
-
+        
+        if os.getenv("EXTRA_EOCV"):
+            eocv_res_path = os.path.join(self.env.log_path, 'eocv_results')
+            if not os.path.exists(eocv_res_path):
+                os.makedirs(eocv_res_path)
+            eocv_fn = 'episode_{}_eocv.json'.format(self.env._current_episode_num)
+            with open(os.path.join(eocv_res_path, eocv_fn), 'w', encoding='utf-8') as f:
+                json.dump(eocv_info, f, indent=4, ensure_ascii=False)
     def evaluate_main(self):
         valid_eval_sets = self.config.get('eval_sets', ValidEvalSets)
         valid_eval_sets = list(valid_eval_sets)
@@ -76,6 +179,7 @@ class EB_AlfredEvaluator():
             episode_info = {'reward': [], 'num_invalid_actions': 0, 'empty_plan': 0}
             obs = self.env.reset()
             img_path = self.env.save_image(obs)
+            last_obs_path = img_path
             user_instruction = self.env.episode_language_instruction
             print(f"Instruction: {user_instruction}")
 
@@ -83,24 +187,31 @@ class EB_AlfredEvaluator():
             # update the action space for alfred due to dynamic objects
             self.planner.set_actions(self.env.language_skill_set)
             done = False
+            eocv_info = []
             while not done:
                 try: 
-                    action, reasoning = self.planner.act(img_path, user_instruction)
-                    print(f"Planner Output Action: {action}")
+                    action, reasoning, eobs = self.planner.act(img_path, user_instruction)
+                    readable_planner_action = [self.env.language_skill_set[action_id] if type(action_id) == int and action_id >= 0 else action_id for action_id in action]
+                    print(f"Planner Output Action: {readable_planner_action}")
+                    if os.getenv("EXTRA_EOCV") and eobs is not None:
+                        print(f"Planner Expected Observation: {eobs}")
                     if action == -2: # empty plan stop here
-                        episode_info['empty_plan'] = 1
-                        self.env.episode_log.append({
-                            'last_action_success': 0.0,
-                            'action_id': -2,
-                            'action_description': 'empty plan',
-                            'reasoning': reasoning,
-                        })
-                        info = {
-                            'task_success': episode_info.get('task_success', 0),
-                            'task_progress': episode_info.get("task_progress", 0),
-                            'env_step': self.env._current_step,
-                        }
-                        break 
+                        if len(self.planner.episode_act_feedback) > 0:
+                            self.planner.episode_act_feedback[-1]['env_feedback'] += "Task is not completed yet, try to figure out the problem and avoid output empty plan."
+                        else:
+                            episode_info['empty_plan'] = 1
+                            self.env.episode_log.append({
+                                'last_action_success': 0.0,
+                                'action_id': -2,
+                                'action_description': 'empty plan',
+                                'reasoning': reasoning,
+                            })
+                            info = {
+                                'task_success': episode_info.get('task_success', 0),
+                                'task_progress': episode_info.get("task_progress", 0),
+                                'env_step': self.env._current_step,
+                            }
+                            break 
                     if action == -1:
                         self.env._cur_invalid_actions += 1
                         episode_info['reward'].append(-1)
@@ -122,14 +233,22 @@ class EB_AlfredEvaluator():
                     
                     # mutiple actions
                     if type(action) == list:
-                        if os.getenv("EXTRA_ONE_STEP") != None:
-                            action_limit = 1
+                        if os.getenv("EXTRA_MULTI_STEP"):
+                            action_lim = 5
+                        elif os.getenv("EXTRA_ONE_STEP"):
+                                action_lim = 1
                         else:
-                            action_limit = 5
-                        for action_single in action[:min(self.env._max_episode_steps - self.env._current_step, len(action), action_limit)]:
+                            action_lim = 1000
+                        action_length = min(self.env._max_episode_steps - self.env._current_step, len(action), action_lim)
+                        for idx, action_single in enumerate(action[:action_length]):
                             obs, reward, done, info = self.env.step(action_single, reasoning=reasoning)
                             action_str = action_single if type(action_single) == str else self.env.language_skill_set[action_single]
                             print(f"Executed action: {action_str}, Task success: {info['task_success']}")
+                            if info['task_success']:
+                                if action_str.startswith("pick up"):
+                                    info['env_feedback'] = "Last action executed successfully. The item you picked up is now shown in the center bottom of the observation image."
+                                elif action_str.startswith("put down"):
+                                    info['env_feedback'] = "Last action executed successfully. The item in your hand is now put down to the closest available receptacle. Hint: use 'find recep' to target at the receptacle before putting down the object in hand to it. "
                             logger.debug(f"reward: {reward}")
                             logger.debug(f"terminate: {done}\n")
                             self.planner.update_info(info)
@@ -137,6 +256,23 @@ class EB_AlfredEvaluator():
                             episode_info['reward'].append(reward)
                             episode_info['num_invalid_actions'] += (info['last_action_success'] == 0)
                             
+                            if os.getenv("EXTRA_EOCV") and eobs is not None and idx < len(eobs) and not action_str.lower().startswith("find") and not idx == action_length - 1: # only validate non-navigate actions and not the last action which is more likely to be affected by the following actions
+                                eobs_single = eobs[idx]
+                                answer, full_output = validate_eobs(action_str, eobs_single, last_obs_path, img_path)
+                                eocv_info.append({
+                                    'step': self.env._current_step,
+                                    'action': action_str,
+                                    'observation': img_path,
+                                    'feedback': info['env_feedback'] if 'env_feedback' in info else '',
+                                    'eobs': eobs_single,
+                                    'eocv_answer': answer,
+                                    'eocv_full_output': full_output,
+                                    'eocv_pass': answer == "yes",
+                                })
+                                if answer != "yes":
+                                    print("EOCV check failed. Replanning ...")
+                                    break
+                            last_obs_path = img_path
                             # Only stop when done
                             # if done or not info['last_action_success']:
                             if done:
@@ -184,7 +320,7 @@ class EB_AlfredEvaluator():
             episode_info["episode_elapsed_seconds"] = info.get("episode_elapsed_seconds", time.time() - self.env._episode_start_time)
 
             self.env.save_episode_log()
-            self.save_episode_metric(episode_info)
+            self.save_episode_metric(episode_info, eocv_info)
             progress_bar.update()
 
 
