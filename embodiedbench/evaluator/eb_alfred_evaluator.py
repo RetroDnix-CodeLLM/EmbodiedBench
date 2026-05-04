@@ -77,7 +77,7 @@ def validate_eobs(action_str, eobs_single, last_frame_path, current_frame_path):
     ]
     chat_response = client.chat.completions.create(
         # model="/home/hyzheng2/QYProjects/models/Qwen/Qwen3.5-2B",
-        model="qwen3.6-plus",
+        model="qwen3.6-flash",
         messages=message,
         max_tokens=2048,
         # temperature=0.0,
@@ -191,13 +191,11 @@ class EB_AlfredEvaluator():
             while not done:
                 try: 
                     action, reasoning, eobs = self.planner.act(img_path, user_instruction)
-                    readable_planner_action = [self.env.language_skill_set[action_id] if type(action_id) == int and action_id >= 0 else action_id for action_id in action]
-                    print(f"Planner Output Action: {readable_planner_action}")
                     if os.getenv("EXTRA_EOCV") and eobs is not None:
                         print(f"Planner Expected Observation: {eobs}")
                     if action == -2: # empty plan stop here
                         if len(self.planner.episode_act_feedback) > 0:
-                            self.planner.episode_act_feedback[-1]['env_feedback'] += "Task is not completed yet, try to figure out the problem and avoid output empty plan."
+                            self.planner.episode_act_feedback[-1][-1] += "Task is not completed yet, try to figure out the problem and avoid output empty plan."
                         else:
                             episode_info['empty_plan'] = 1
                             self.env.episode_log.append({
@@ -230,12 +228,17 @@ class EB_AlfredEvaluator():
                         if self.env._cur_invalid_actions >= self.env._max_invalid_actions:
                             break
                         continue
-                    
+                    if isinstance(action, list):
+                        readable_planner_action = [self.env.language_skill_set[action_id] if type(action_id) == int and action_id >= 0 else action_id for action_id in action]
+                        print(f"Planner Output Action: {readable_planner_action}")
                     # mutiple actions
                     if type(action) == list:
                         if os.getenv("EXTRA_MULTI_STEP"):
                             action_lim = 5
                         elif os.getenv("EXTRA_ONE_STEP"):
+                            if len(action) > 0 and isinstance(action[0], int) and self.env.language_skill_set[action[0]].startswith("find"):
+                                action_lim = 2
+                            else:
                                 action_lim = 1
                         else:
                             action_lim = 1000
@@ -292,7 +295,10 @@ class EB_AlfredEvaluator():
                         episode_info['num_invalid_actions'] += (info['last_action_success'] == 0)
                 
                 except Exception as e: 
-                    print(e)
+                    # Print complete stack back trace
+                    import traceback
+                    traceback.print_exc()
+                    logger.error(f"Error in planner.act: {e}")
                     time.sleep(30)
 
             

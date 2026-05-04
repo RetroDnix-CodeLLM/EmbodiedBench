@@ -218,7 +218,7 @@ class EB_HabitatEvaluator():
 
                     if action == -2: # empty plan stop here
                         if len(self.planner.episode_act_feedback) > 0:
-                            self.planner.episode_act_feedback[-1]['env_feedback'] += "Task not done yet, avoid output empty plan."
+                            self.planner.episode_act_feedback[-1][-1] += "Task not done yet, avoid output empty plan."
                         else:
                             episode_info['empty_plan'] = 1
                             self.env.episode_log.append({
